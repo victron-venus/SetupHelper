@@ -51,3 +51,7 @@ The isolated PackageManager regression suite also covers nested archive discover
 rejection of directory symlink traversal, missing package removal without losing
 the list lock, and invalid removal indices. These tests execute the original
 function bodies with device dependencies replaced; they do not install packages.
+
+[Conflict refresh regressions](../tests/test_package_conflict_refresh.py) verify
+that repeated checks retain existing file conflicts, keep dependency state
+separate, and clear only the conflicts whose underlying cause was resolved.

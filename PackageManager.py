@@ -2069,16 +2069,19 @@ class PackageClass:
 					logging.critical ("error while reading file lists for " + packageName)
 					continue
 
-			conflicts = self.DependencyErrors
+			conflicts = list (self.DependencyErrors)
 
 			if fileConflicts != self.FileConflicts:
 				self.FileConflicts = fileConflicts
 				if len (fileConflicts) > 0:
 					for (otherPackage, dependency, file) in fileConflicts:
 						logging.info ("to install " + packageName + ", " + otherPackage + " must not be installed (" + file + ")" )
-						conflicts.append ( ( otherPackage, dependency ) )
 				else:
 					logging.info ("file conflicts for " + packageName + " have been resolved")
+
+			# File conflicts remain active even when the previous scan found the same files.
+			# Keep the dependency cache independent so every refresh combines both sources.
+			conflicts.extend ((otherPackage, dependency) for otherPackage, dependency, _ in fileConflicts)
 
 			details = ""
 			if len (conflicts) > 0:
