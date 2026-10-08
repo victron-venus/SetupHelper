@@ -280,6 +280,11 @@ updateRootToReadWrite ()
 function versionStringToNumber ()
 {
 	local version="$*"
+	local originalVersion="$version"
+	# A large image and its legacy build counter use the normal version order.
+	if [[ "$version" == *-large || "$version" =~ -large-[0-9]+$ ]]; then
+		version="${version%-large*}"
+	fi
 	local numberParts
 	local versionParts
 	local numberParts
@@ -297,7 +302,7 @@ function versionStringToNumber ()
 	numberPartsLength=${#numberParts[@]}
 	if (( $numberPartsLength == 0 )); then
 		versionNumber=0
-		versionStringToNumberStatus="$version: invalid, missing major version"
+		versionStringToNumberStatus="$originalVersion: invalid, missing major version"
 		return 1
 	fi
 	if (( $numberPartsLength >= 2 )); then
@@ -340,7 +345,7 @@ function versionStringToNumber ()
 	fi
 
 	versionNumber=$number
-	versionStringToNumberStatus="$version:$number $type"
+	versionStringToNumberStatus="$originalVersion:$number $type"
 	return 0
 }
 

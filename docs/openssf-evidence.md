@@ -55,3 +55,8 @@ function bodies with device dependencies replaced; they do not install packages.
 [Conflict refresh regressions](../tests/test_package_conflict_refresh.py) verify
 that repeated checks retain existing file conflicts, keep dependency state
 separate, and clear only the conflicts whose underlying cause was resolved.
+
+[Version ordering regressions](../tests/test_version_order.py) compare the Python
+manager and isolated shell conversion function. Normal and large images share
+the same version identity, including the legacy large-build counter, and a
+large prerelease remains older than the corresponding stable release.

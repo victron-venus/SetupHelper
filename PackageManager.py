@@ -428,7 +428,17 @@ def _version_release_kind (other_parts, part_count):
 	return 'release', 90000
 
 
+def _without_large_build_suffix (version):
+	"""Large images and their legacy build counter share the normal version."""
+	base, marker, suffix = version.rpartition ("-large")
+	legacy_build = suffix.startswith ("-") and suffix[1:].isascii() and suffix[1:].isdigit()
+	if marker and (not suffix or legacy_build):
+		return base
+	return version
+
+
 def VersionToNumber (version):
+	version = _without_large_build_suffix (version)
 	version = version.replace ("large","L")
 	number_parts = re.split (r'\D+', version)
 	other_parts = re.split (r'\d+', version)
