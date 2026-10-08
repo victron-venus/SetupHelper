@@ -3388,12 +3388,12 @@ class MediaScanClass (threading.Thread):
 			optionsSourceDir = backupPath + "/setupOptions"
 			optionsDestDir = "/data/setupOptions"
 
-			# remove any previous options backups
-			if os.path.isdir (optionsDestDir):
-				shutil.rmtree (optionsDestDir)
-
 			if os.path.isdir (optionsSourceDir):
 				try:
+					# A legacy or partial backup may not include package preferences.
+					# Replace current options only when a backup directory exists.
+					if os.path.isdir (optionsDestDir):
+						shutil.rmtree (optionsDestDir)
 					shutil.copytree ( optionsSourceDir, optionsDestDir )
 				except Exception:
 					logging.error ("settingsRestore: options restore failed")
@@ -4268,7 +4268,6 @@ def main():
 
 #### Initial entry point for program
 main()
-
 
 
 
