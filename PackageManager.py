@@ -1786,7 +1786,7 @@ class PackageClass:
 			# if not just removing a duplicate
 			# block future automatic adds since the package is being removed
 			if not isDuplicate:
-				PackageClass.SetAutoAddOk (packageName, False)
+				PackageClass.SetAutoAddOk (packages[toIndex].PackageName, False)
 
 			# move packages after the one to be remove down one slot (copy info)
 			# each copy overwrites the lower numbered package

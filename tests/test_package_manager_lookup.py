@@ -48,7 +48,7 @@ class PackageLookupTests(unittest.TestCase):
         remove = load_method(
             "PackageClass", "RemovePackage", PackageClass=owner, DbusIf=bus,
             logging=logging, ERROR=logging.ERROR, INFO=logging.INFO,
-            CRITICAL=logging.CRITICAL,
+            CRITICAL=logging.CRITICAL, NONE=0,
         )
         return remove, owner, bus
 
@@ -71,3 +71,24 @@ class PackageLookupTests(unittest.TestCase):
                 self.assertEqual(len(packages), 1)
                 bus.LOCK.assert_not_called()
                 owner.SetAutoAddOk.assert_not_called()
+
+    def test_index_removal_blocks_the_matched_name_before_slots_move(self):
+        for index, duplicate in ((0, False), (1, False), (0, True)):
+            with self.subTest(index=index, duplicate=duplicate):
+                packages = [
+                    Mock(PackageName="first", InstalledVersion=""),
+                    Mock(PackageName="second", InstalledVersion=""),
+                ]
+                removed_name = packages[index].PackageName
+                first = packages[0]
+                first.SetPackageName.side_effect = lambda name: setattr(first, "PackageName", name)
+                remove, owner, bus = self.remover(packages)
+                self.assertTrue(remove(owner, packageName=None, packageIndex=index, isDuplicate=duplicate))
+                self.assertEqual(len(packages), 1)
+                if duplicate:
+                    owner.SetAutoAddOk.assert_not_called()
+                else:
+                    owner.SetAutoAddOk.assert_called_once_with(removed_name, False)
+                if index == 0:
+                    self.assertEqual(packages[0].PackageName, "second")
+                bus.UNLOCK.assert_called_once_with("RemovePackage")
