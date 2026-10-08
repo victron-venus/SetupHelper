@@ -269,3 +269,9 @@ It is possible to use SetupHelper to set up a new system based on a template sav
   - Create `AUTO_INSTALL_PACKAGES` on the flash drive as well.
   - Place the flash drive into the GX device to be configured and reboot (once for v2.90 or twice for prior versions).
   - **REMOVE THE FLASH DRIVE** after you have verified that all packages have been installed (check Active packages in PackageManager).
+
+## Contributing and security
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for reports, development checks and pull requests,
+[SECURITY.md](SECURITY.md) for private vulnerability reporting and deployment trust boundaries,
+and the [OpenSSF evidence index](docs/openssf-evidence.md) for assessment references and remaining verification.
