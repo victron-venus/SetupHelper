@@ -30,3 +30,8 @@ Automated tests use mocks or controlled fixtures where available. A passing unit
 - [PackageDevelopmentGuidelines.md](PackageDevelopmentGuidelines.md)
 
 See [ReadMe.md](ReadMe.md) for acquisition, configuration and usage, and [the evidence index](docs/openssf-evidence.md) for the public development-process references.
+
+The required package-state workflow also rejects undefined first-party Python
+names with pinned Ruff `0.16.5` (`F821,F822,F823`). Run the same check against
+`PackageManager.py tests` before opening a pull request. Vendored `velib_python`
+retains its upstream review and update process.
