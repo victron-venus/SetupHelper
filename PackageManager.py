@@ -423,11 +423,8 @@ def VersionToNumber (version):
 	# discard blank elements
 	#	this can happen if the version string starts with alpha characters (like "v")
 	# 	of if there are no numeric digits in the version string
-	try:
-		while numberParts [0] == "":
-			numberParts.pop(0)
-	except:
-		pass
+	while numberParts and numberParts[0] == "":
+		numberParts.pop(0)
 
 	numberPartsLength = len (numberParts)
 
@@ -471,7 +468,7 @@ def VersionToNumber (version):
 versionFile = "/opt/victronenergy/version"
 try:
 	file = open (versionFile, 'r')
-except:
+except Exception:
 	VenusVersion = ""
 	VenusVersionNumber = 0
 else:
@@ -633,7 +630,7 @@ def PushAction (command=None, source=None):
 		except queue.Full:
 			logging.error ("command " + command + " from " + source + " lost - " + queueText + " - queue full")
 			return False
-		except:
+		except Exception:
 			logging.error ("command " + command + " from " + source + " lost - " + queueText + " - other queue error")
 			return False
 	else:
@@ -662,16 +659,16 @@ def LocatePackagePath (origPath):
 	paths = os.listdir (origPath)
 	for path in paths:
 		newPath = origPath +'/' + path
-		if os.path.isdir(newPath):
+		if os.path.isdir(newPath) and not os.path.islink(newPath):
 			# found version file, make sure it is "valid"
 			versionFile = newPath + "/version"
 			if os.path.isfile( versionFile ):
 				return newPath
 			else:
-				packageDir = locatePackagePath (newPath)
+				package_dir = LocatePackagePath (newPath)
 				# found a package directory
-				if packageDir != None:
-					return packageDir
+				if package_dir != None:
+					return package_dir
 				# nothing found - continue looking in this directory
 				else:
 					continue
@@ -767,7 +764,7 @@ class AddRemoveClass (threading.Thread):
 
 				changes = False
 				continue
-			except:
+			except Exception:
 				logging.error ("pull from AddRemoveQueue failed")
 				continue
 			if len (command) == 0:
@@ -808,7 +805,7 @@ class AddRemoveClass (threading.Thread):
 							fd = open (gitHubInfoFile, 'r')
 							parts = fd.readline().strip ().split (':')
 							fd.close()
-						except:
+						except Exception:
 							parts = ""
 						if len (parts) >= 2:
 							user = parts[0]
@@ -910,7 +907,7 @@ class DbusIfClass:
 			_, stderr = proc.communicate ()
 			stderr = stderr.decode ().strip ()
 			returnCode = proc.returncode
-		except:
+		except Exception:
 			logging.error ("dbus RemoveSettings call failed")
 		else:
 			if returnCode != 0:
@@ -983,10 +980,7 @@ class DbusIfClass:
 			dbusValue = 0
 		self.DbusService['/BackupMediaAvailable'] = dbusValue
 	def GetBackupMediaAvailable (self):
-		if self.DbusService['/BackupMediaAvailable'] == 1:
-			return True
-		else:
-			return True
+		return self.DbusService['/BackupMediaAvailable'] == 1
 
 	def SetBackupSettingsFileExist (self, value):
 		if value == True:
@@ -1003,10 +997,7 @@ class DbusIfClass:
 		self.DbusService['/BackupSettingsLocalFileExist'] = dbusValue
 
 	def GetBackupSettingsFileExist (self):
-		if self.DbusService['/BackupSettingsFileExist'] == 1:
-			return True
-		else:
-			return True
+		return self.DbusService['/BackupSettingsFileExist'] == 1
 
 	def SetBackupProgress (self, value):
 		self.DbusService['/BackupProgress'] = value
@@ -1139,17 +1130,18 @@ class DbusIfClass:
 
 	def ReadDefaultPackagelist (self):
 
+		list_filename = "/data/SetupHelper/defaultPackageList"
 		try:
-			listFile = open ("/data/SetupHelper/defaultPackageList", 'r')
-		except:
-			logging.error ("no defaultPackageList " + listFileName)
+			list_file = open (list_filename, 'r')
+		except OSError:
+			logging.error ("no defaultPackageList " + list_filename)
 		else:
-			for line in listFile:
+			for line in list_file:
 				parts = line.split ()
 				if len(parts) < 3 or line[0] == "#":
 					continue
 				self.rawDefaultPackages.append ( ( parts[0], parts[1], parts[2] ) )
-			listFile.close ()
+			list_file.close ()
 
 
 	# LOCK and UNLOCK - capitals used to make it easier to identify in the code
@@ -1167,7 +1159,7 @@ class DbusIfClass:
 		requestTime = time.time()
 		reportTime = requestTime
 		while True:
-			if self.lock.acquire (blocking=False):
+			if self._package_lock.acquire (blocking=False):
 				# here if lock was acquired
 				return
 			else:
@@ -1185,13 +1177,13 @@ class DbusIfClass:
 		
 	def UNLOCK (self, name):
 		try:
-			self.lock.release ()
+			self._package_lock.release ()
 		except RuntimeError:
 			logging.error ("UNLOCK when not locked - continuing " + name)
 			
 
 	def __init__(self):
-		self.lock = threading.RLock()
+		self._package_lock = threading.RLock()
 		settingsList = {'packageCount': [ '/Settings/PackageManager/Count', 0, 0, 0 ],
 						'autoDownload': [ '/Settings/PackageManager/GitHubAutoDownload', 0, 0, 0 ],
 						'autoInstall': [ '/Settings/PackageManager/AutoInstall', 0, 0, 0 ],
@@ -1451,27 +1443,27 @@ class PackageClass:
 			# create service paths if they don't already exist
 			try:
 				foo = DbusIf.DbusService[self.installedVersionPath]
-			except:
+			except Exception:
 				DbusIf.DbusService.add_path (self.installedVersionPath, "" )
 			try:
 				foo = DbusIf.DbusService[self.gitHubVersionPath]
-			except:
+			except Exception:
 				DbusIf.DbusService.add_path (self.gitHubVersionPath, "" )
 			try:
 				foo = DbusIf.DbusService[self.packageVersionPath]
-			except:
+			except Exception:
 				DbusIf.DbusService.add_path (self.packageVersionPath, "" )
 			try:
 				foo = DbusIf.DbusService[self.incompatiblePath]
-			except:
+			except Exception:
 				DbusIf.DbusService.add_path (self.incompatiblePath, "" )
 			try:
 				foo = DbusIf.DbusService[self.incompatibleDetailsPath]
-			except:
+			except Exception:
 				DbusIf.DbusService.add_path (self.incompatibleDetailsPath, "" )
 			try:
 				foo = DbusIf.DbusService[self.IncompatibleResolvablePath]
-			except:
+			except Exception:
 				DbusIf.DbusService.add_path (self.IncompatibleResolvablePath, "" )
 
 		self.packageNamePath = '/Settings/PackageManager/' + section + '/PackageName'
@@ -1643,7 +1635,7 @@ class PackageClass:
 				fd = open (versionFile, 'r')
 				version = fd.readline().strip()
 				fd.close ()
-			except:
+			except Exception:
 				continue
 			if version == "" or version[0] != 'v':
 				continue
@@ -1751,6 +1743,9 @@ class PackageClass:
 				DbusIf.UpdateStatus ( message="removing " + packageName, where='Editor', logLevel=INFO )
 		# no package name specified, so this is a call from system initialization - messages to log only
 		elif packageIndex != None:
+			if type(packageIndex) is not int or not 0 <= packageIndex < len(PackageClass.PackageList):
+				logging.error ("RemovePackage: invalid package index")
+				return False
 			guiRequestedRemove = False
 			name = PackageClass.PackageList [packageIndex].PackageName
 			if name == None or name == "":
@@ -1784,14 +1779,14 @@ class PackageClass:
 			toIndex = packageIndex
 			matchFound = True
 
-		packageIsInstalled = packages[toIndex].InstalledVersion != ""
+		package_is_installed = matchFound and packages[toIndex].InstalledVersion != ""
 		
 		# if package is installed, don't remove it
-		if matchFound and not packageIsInstalled:
+		if matchFound and not package_is_installed:
 			# if not just removing a duplicate
 			# block future automatic adds since the package is being removed
 			if not isDuplicate:
-				PackageClass.SetAutoAddOk (packageName, False)
+				PackageClass.SetAutoAddOk (packages[toIndex].PackageName, False)
 
 			# move packages after the one to be remove down one slot (copy info)
 			# each copy overwrites the lower numbered package
@@ -1895,7 +1890,7 @@ class PackageClass:
 		installedVersionFile = "/etc/venus/installedVersion-" + packageName
 		try:
 			versionFile = open (installedVersionFile, 'r')
-		except:
+		except Exception:
 			installedVersion = ""
 		else:
 			installedVersion = versionFile.readline().strip()
@@ -1919,7 +1914,7 @@ class PackageClass:
 			versionFile = open (packageDir + "/version", 'r')
 			packageVersion = versionFile.readline().strip()
 			versionFile.close()
-		except:
+		except Exception:
 			packageVersion = ""
 		self.SetPackageVersion (packageVersion)
 
@@ -1946,13 +1941,13 @@ class PackageClass:
 				fd = open (packageDir + "/firstCompatibleVersion", 'r')
 				firstVersion = fd.readline().strip()
 				fd.close ()
-			except:
+			except Exception:
 				firstVersion = "v2.71"
 			try:
 				fd = open (packageDir + "/obsoleteVersion", 'r')
 				obsoleteVersion = fd.readline().strip()
 				fd.close ()
-			except:
+			except Exception:
 				obsoleteVersion = "v9999.9999.9999"
 			
 			firstVersionNumber = VersionToNumber (firstVersion)
@@ -2017,7 +2012,7 @@ class PackageClass:
 							if packageIsInstalled != packageMustBeInstalled:
 								dependencyErrors.append ( (dependencyPackage, dependencyRequirement) )
 					dependencyErrors.sort()
-				except:
+				except Exception:
 					pass
 			# log dependency changes if they have changed
 			if dependencyErrors != self.DependencyErrors:
@@ -2068,9 +2063,9 @@ class PackageClass:
 										if packageFromList != packageName:
 											file =  os.path.basename (replacementFile)
 											fileConflicts.append ( (packageFromList, "uninstalled", file) )
-							except:
+							except Exception:
 								pass
-				except:
+				except Exception:
 					logging.critical ("error while reading file lists for " + packageName)
 					continue
 
@@ -2219,7 +2214,7 @@ class UpdateGitHubVersionClass (threading.Thread):
 			stdout, _ = proc.communicate ()
 			stdout = stdout.decode ().strip ()
 			returnCode = proc.returncode
-		except:
+		except Exception:
 			logging.error ("wget for version failed " + packageName)
 			gitHubVersion = ""
 		else:
@@ -2335,7 +2330,7 @@ class UpdateGitHubVersionClass (threading.Thread):
 			except queue.Empty:	# means get() timed out as expected - not an error
 				# timeout indicates it's time to do a background update
 				pass
-			except:
+			except Exception:
 				logging.error ("pull from GitHubVersionQueue failed")
 			if command == 'STOP' or self.threadRunning == False:
 				return
@@ -2508,7 +2503,7 @@ class DownloadGitHubPackagesClass (threading.Thread):
 				_, stderr = proc.communicate()
 				stderr = stderr.decode ().strip ()
 				returnCode = proc.returncode
-			except:
+			except Exception:
 				errorMessage = "could not access archive on GitHub " + packageName
 				downloadError = True
 			else:
@@ -2525,7 +2520,7 @@ class DownloadGitHubPackagesClass (threading.Thread):
 				_, stderr = proc.communicate ()
 				stderr = stderr.decode ().strip ()
 				returnCode = proc.returncode
-			except:
+			except Exception:
 				errorMessage = "could not unpack " + packageName + ' ' + gitHubUser + ' ' + gitHubBranch
 				downloadError = True
 			else:
@@ -2549,7 +2544,7 @@ class DownloadGitHubPackagesClass (threading.Thread):
 			try:
 				if os.path.exists (tempPackagePath):
 					shutil.rmtree (tempPackagePath, ignore_errors=True)	# like rm -rf
-			except:
+			except Exception:
 				pass
 
 			DbusIf.LOCK ("GitHubDownload - move package")
@@ -2558,7 +2553,7 @@ class DownloadGitHubPackagesClass (threading.Thread):
 					os.rename (packagePath, tempPackagePath)
 				shutil.move (unpackedPath, packagePath)
 				
-			except:
+			except Exception:
 				errorMessage = "couldn't update " + packageName
 				downloadError = True
 			DbusIf.UNLOCK ("GitHubDownload - move package")
@@ -2659,7 +2654,7 @@ class DownloadGitHubPackagesClass (threading.Thread):
 			# if there was one, skip auto downloads until next pass
 			try:
 				command = self.DownloadQueue.get () # block forever
-			except:
+			except Exception:
 				logging.error ("pull from DownloadQueue queue failed")
 				time.sleep (5.0)
 				continue
@@ -2814,7 +2809,7 @@ class InstallPackagesClass (threading.Thread):
 				stderr += line
 			returnCode = proc.returncode
 			setupRunFail = False
-		except:
+		except Exception:
 			setupRunFail = True
 
 		# manage the result of the setup run while locked just in case
@@ -2919,61 +2914,66 @@ class InstallPackagesClass (threading.Thread):
 
 		DbusIf.LOCK ("ResolveConflicts")
 	
-		package = PackageClass.LocatePackage (packageName)
-		if package == None:
-			logging.error ("ResolveConflicts: " + packageName + "not found")
+		try:
+			package = PackageClass.LocatePackage (packageName)
+			if package == None:
+				logging.error ("ResolveConflicts: " + packageName + "not found")
+				return
 
-		for conflict in (package.DependencyErrors + package.FileConflicts):
-			if len (conflict) < 2:
-				logging.error ("ResolveConflicts: " + packageName + " missing parameters: " + str (conflict) )
-				continue
-			dependencyPackage = conflict[0]
-			dependencyRequirement = conflict[1]
-			if dependencyRequirement == "installed":
-				packageMustBeInstalled = True
-			elif dependencyRequirement == "uninstalled":
-				packageMustBeInstalled = False
-			else:
-				logging.error ("ResolveConflicts: " + packageName + " unrecognized requirement: " + str (conflict) )
-				continue
-
-			requiredPackage = PackageClass.LocatePackage (dependencyPackage)
-
-			if requiredPackage.InstalledVersion != "":
-				packageIsInstalled = True
-			else:
-				packageIsInstalled = False
-			if requiredPackage.PackageVersion != "":
-				packageIsStored = True
-			else:
-				packageIsStored = False
-			if requiredPackage.GitHubVersion != "":
-				packageIsOnGitHub = True
-			else:
-				packageIsOnGitHub = False
-			if packageIsStored or packageIsOnGitHub:
-				packageIsAvailable = True
-			else:
-				packageIsAvailable = True
-
-			if packageMustBeInstalled and not packageIsInstalled:
-				if not packageIsAvailable:
-					DbusIf.UpdateStatus ( message=dependencyPackage + " not available - can't install",
-								where='Editor', logLevel=WARNING )
-				elif not packageIsStored and packageIsOnGitHub:
-					logging.info ("ResolveConflicts: downloading and installing" + dependencyPackage + " so that " + packageName + " can be installed" )
-					PushAction ( command='download' + ':' + dependencyPackage, source=source )
-					# download will trigger install when it finished
-					requiredPackage.InstallAfterDownload = True
+			for conflict in (package.DependencyErrors + package.FileConflicts):
+				if len (conflict) < 2:
+					logging.error ("ResolveConflicts: " + packageName + " missing parameters: " + str (conflict) )
+					continue
+				dependencyPackage = conflict[0]
+				dependencyRequirement = conflict[1]
+				if dependencyRequirement == "installed":
+					packageMustBeInstalled = True
+				elif dependencyRequirement == "uninstalled":
+					packageMustBeInstalled = False
 				else:
-					logging.info ("ResolveConflicts: installing " + dependencyPackage + " so that " + packageName + " can be installed" )
-					PushAction ( command='install' + ':' + dependencyPackage, source=source )
+					logging.error ("ResolveConflicts: " + packageName + " unrecognized requirement: " + str (conflict) )
+					continue
 
-			elif not packageMustBeInstalled and packageIsInstalled:
-				logging.info ("ResolveConflicts: uninstalling " + dependencyPackage + " so that " + packageName + " can be installed" )
-				PushAction ( command='uninstall' + ':' + dependencyPackage, source=source )
+				requiredPackage = PackageClass.LocatePackage (dependencyPackage)
+				if requiredPackage is None:
+					if packageMustBeInstalled:
+						DbusIf.UpdateStatus (message=dependencyPackage + " not available - can't install",
+							where='Editor', logLevel=WARNING)
+					continue
 
-		DbusIf.UNLOCK ("ResolveConflicts")
+				if requiredPackage.InstalledVersion != "":
+					packageIsInstalled = True
+				else:
+					packageIsInstalled = False
+				if requiredPackage.PackageVersion != "":
+					packageIsStored = True
+				else:
+					packageIsStored = False
+				if requiredPackage.GitHubVersion != "":
+					packageIsOnGitHub = True
+				else:
+					packageIsOnGitHub = False
+				package_is_available = packageIsStored or packageIsOnGitHub
+
+				if packageMustBeInstalled and not packageIsInstalled:
+					if not package_is_available:
+						DbusIf.UpdateStatus ( message=dependencyPackage + " not available - can't install",
+									where='Editor', logLevel=WARNING )
+					elif not packageIsStored and packageIsOnGitHub:
+						logging.info ("ResolveConflicts: downloading and installing" + dependencyPackage + " so that " + packageName + " can be installed" )
+						PushAction ( command='download' + ':' + dependencyPackage, source=source )
+						# download will trigger install when it finished
+						requiredPackage.InstallAfterDownload = True
+					else:
+						logging.info ("ResolveConflicts: installing " + dependencyPackage + " so that " + packageName + " can be installed" )
+						PushAction ( command='install' + ':' + dependencyPackage, source=source )
+
+				elif not packageMustBeInstalled and packageIsInstalled:
+					logging.info ("ResolveConflicts: uninstalling " + dependencyPackage + " so that " + packageName + " can be installed" )
+					PushAction ( command='uninstall' + ':' + dependencyPackage, source=source )
+
+		finally:
+			DbusIf.UNLOCK ("ResolveConflicts")
 
 
 	#	InstallPackage run (the thread)
@@ -2995,7 +2995,7 @@ class InstallPackagesClass (threading.Thread):
 		while self.threadRunning:
 			try:
 				command = self.InstallQueue.get ()
-			except:
+			except Exception:
 				logging.error ("pull from Install queue failed")
 				continue
 			if len (command) == 0:
@@ -3097,7 +3097,7 @@ class MediaScanClass (threading.Thread):
 			_, stderr = proc.communicate ()
 			stderr = stderr.decode ().strip ()
 			returnCode = proc.returncode
-		except:
+		except Exception:
 			DbusIf.UpdateStatus ( message="tar failed for " + packageName,
 									where='Media', logLevel=ERROR)
 			time.sleep (5.0)
@@ -3126,14 +3126,14 @@ class MediaScanClass (threading.Thread):
 		packagePath = "/data/" + packageName
 		try:
 			fd = open (packagePath + "/version", 'r')
-		except:
+		except Exception:
 			packageVersion = 0
 		else:
 			packageVersion = VersionToNumber (fd.readline().strip())
 			fd.close ()
 		try:
 			fd = open (unpackedPath + "/version", 'r')
-		except:
+		except Exception:
 			unpackedVersion = 0
 		else:
 			unpackedVersion = VersionToNumber (fd.readline().strip())
@@ -3156,7 +3156,7 @@ class MediaScanClass (threading.Thread):
 			os.rename (packagePath, tempPackagePath)
 		try:
 			shutil.move (unpackedPath, packagePath)
-		except:
+		except Exception:
 			logging.error ( "transferPackages: couldn't relocate " + packageName )
 		if os.path.exists (tempPackagePath):
 			shutil.rmtree (tempPackagePath, ignore_errors=True)	# like rm -rf
@@ -3214,7 +3214,7 @@ class MediaScanClass (threading.Thread):
 					try:
 						value =  bus.get_object("com.victronenergy.settings", setting).GetValue()
 						attributes = bus.get_object("com.victronenergy.settings", setting).GetAttributes()
-					except:
+					except Exception:
 						continue
 					dataType = type (value)
 					if dataType is dbus.Double:
@@ -3244,7 +3244,7 @@ class MediaScanClass (threading.Thread):
 
 			backupSettings.close ()
 			listFile.close ()
-		except:
+		except Exception:
 			logging.error ("settings backup - settings write failure")
 		
 		if not settingsOnly:
@@ -3269,7 +3269,7 @@ class MediaScanClass (threading.Thread):
 								continue
 							shutil.copy ( overlaySourceDir + "/" + overlay, overlayDestDir )
 							overlayCount += 1
-			except:
+			except Exception:
 				logging.error ("settings backup - logo write failure")
 
 			# copy log files
@@ -3279,12 +3279,10 @@ class MediaScanClass (threading.Thread):
 				if os.path.isdir (logDestDir):
 					shutil.rmtree (logDestDir)
 
-				proc = subprocess.Popen ( [ 'zip', '-rq', backupPath + "/logs.zip", "/data/log" ],
-										bufsize=-1, stdout=subprocess.PIPE, stderr=subprocess.PIPE )
-				proc.commiunicate()	#output ignored
-				returnCode = proc.returncode
+				subprocess.run ( [ 'zip', '-rq', backupPath + "/logs.zip", "/data/log" ],
+									stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True )
 				logsWritten = "logs"
-			except:
+			except Exception:
 				logging.error ("settings backup - log write failure")
 				logsWritten = "no logs"
 
@@ -3301,7 +3299,7 @@ class MediaScanClass (threading.Thread):
 
 				if os.path.isdir (optionsSourceDir):
 					shutil.copytree ( optionsSourceDir, optionsDestDir )
-			except:
+			except Exception:
 				logging.error ("settings backup - overlays write failure")
 		
 		logging.info ("settings backup completed - " + str(settingsCount) + " settings, " + str (overlayCount) + " logos, "
@@ -3312,6 +3310,7 @@ class MediaScanClass (threading.Thread):
 		backupFile = backupPath + "/settingsBackup"
 		if not os.path.exists (backupFile):
 			logging.error (backupFile + " does not exist - can't restore settings")
+			return
 		bus = dbus.SystemBus()
 		settingsCount = 0
 		overlayCount = 0
@@ -3346,7 +3345,7 @@ class MediaScanClass (threading.Thread):
 				try:
 					bus.get_object("com.victronenergy.settings", path).GetValue()
 					parameterExists = True
-				except:
+				except Exception:
 					pass
 
 				if not parameterExists:
@@ -3355,19 +3354,18 @@ class MediaScanClass (threading.Thread):
 					# parameter does not yet exist, create it
 					else:
 						# silent uses a different method
-						if silent == 1:
+						if silent == "1":
 							method = 'AddSettingSilent'
 						else:
 							method = 'AddSetting'
 
 						try:
-							proc = subprocess.Popen ( [ 'dbus', '-y', 'com.victronenergy.settings', '/', method, '',
-											path, default, typeId, min, max ], 
-											bufsize=-1, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-							proc.commiunicate ()	# output ignored
+							subprocess.run ( [ 'dbus', '-y', 'com.victronenergy.settings', '/', method, '',
+											path, default, typeId, min, max ],
+											stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True )
 							parameterExists = True
 							logging.info ("settingsRestore: creating " + path)
-						except:
+						except Exception:
 							logging.error ("settingsRestore: settings create failed for " + path)
 
 				# update parameter's value if it exists (or was just created)
@@ -3390,7 +3388,7 @@ class MediaScanClass (threading.Thread):
 							continue
 						try:
 							shutil.copy ( overlaySourceDir + "/" + overlay, overlayDestDir )
-						except:
+						except Exception:
 							logging.error ("settingsRestore: overlay create failed for " + overlay)
 						overlayCount += 1
 
@@ -3405,7 +3403,7 @@ class MediaScanClass (threading.Thread):
 			if os.path.isdir (optionsSourceDir):
 				try:
 					shutil.copytree ( optionsSourceDir, optionsDestDir )
-				except:
+				except Exception:
 					logging.error ("settingsRestore: options restore failed")
 		
 		logging.info ("settings restore completed - " + str(settingsCount) + " settings and " + str (overlayCount) + " overlays")
@@ -3450,7 +3448,7 @@ class MediaScanClass (threading.Thread):
 			except queue.Empty:	# queue empty is OK
 				# timeout indicates it's time to make one pass through the code below
 				pass
-			except:
+			except Exception:
 				logging.error ("pull from MediaQueue failed")
 				time.sleep (5.0)
 			if command == 'STOP' or self.threadRunning == False:
@@ -3488,7 +3486,7 @@ class MediaScanClass (threading.Thread):
 
 			try:
 				drives = os.listdir (root)
-			except:
+			except Exception:
 				drives = []
 
 			if len (drives) == 0:
@@ -3740,11 +3738,10 @@ def mainLoop ():
 	timeSyncCommand = '/etc/init.d/save-rtc.sh'
 	if startTime > lastTimeSync + 30 and os.path.exists (timeSyncCommand):
 		try:
-			subprocess.Popen ( [ timeSyncCommand ],
-					bufsize=-1, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-			proc.commiunicate ()	# output ignored
-		except:
-			pass
+			subprocess.run ( [ timeSyncCommand ], timeout=10,
+					stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True )
+		except (OSError, subprocess.SubprocessError):
+			logging.exception ("could not save system time")
 		lastTimeSync = startTime
 
 	packageName = "none"
@@ -3825,7 +3822,7 @@ def mainLoop ():
 						os.remove (bootReinstallFile)
 					except FileNotFoundError:
 						pass
-					except:
+					except Exception:
 						# log the error and continue
 						# set flag so we don't repeat the reinstall if the flag removal fails (until next boot)
 						ignoreBootInstall = True
@@ -3979,7 +3976,7 @@ def	directUninstall (packageName ):
 			for line in proc.stderr:
 				logging.error ( line.strip () )
 			returnCode = proc.returncode
-	except:
+	except Exception:
 		logging.critical ("could not uninstall " + packageName)
 	else:
 		if returnCode == EXIT_REBOOT:
@@ -4038,7 +4035,7 @@ def main():
 	installedVersionFile = "/etc/venus/installedVersion-SetupHelper"
 	try:
 		versionFile = open (installedVersionFile, 'r')
-	except:
+	except Exception:
 		installedVersion = ""
 	else:
 		installedVersion = versionFile.readline().strip()
@@ -4059,7 +4056,7 @@ def main():
 	platformFile = "/etc/venus/machine"
 	try:
 		file = open (platformFile, 'r')
-	except:
+	except Exception:
 		Platform = "???"
 	else:
 		machine = file.readline().strip()
@@ -4236,7 +4233,7 @@ def main():
 		InstallPackages.join (timeout=1.0)
 		AddRemove.join (timeout=1.0)
 		MediaScan.join (timeout=1.0)
-	except:
+	except Exception:
 		logging.critical ("one or more threads failed to exit")
 		pass
 
@@ -4262,7 +4259,7 @@ def main():
 			proc = subprocess.Popen ( [ 'svc', '-o', '/service/PackageManager' ] )
 			# TODO: add -k for debugging - outputs message but doesn't reboot
 			proc = subprocess.Popen ( "nohup sleep 5; shutdown -r now PackageManager is REBOOTING SYSTEM ... &", shell=True )
-		except:
+		except Exception:
 			logging.critical ("system reboot command failed")
 	elif GuiRestart:
 		if os.path.exists ("/service/start-gui" ):
@@ -4271,7 +4268,7 @@ def main():
 			command = [ 'svc', '-t', '/service/gui' ]
 		try:
 			proc = subprocess.Popen ( command )
-		except:
+		except Exception:
 			logging.critical ("GUI restart failed")
 
 
