@@ -1130,6 +1130,10 @@ prompt indicating to choose a different name.
 Saves settings to the settingsBackup file on removable SD/USB media or
 to local media (`/data/settingsBackup`). restores from same.
 
+New backups use versioned records that preserve commas and newlines in values.
+Update SetupHelper on the restore destination first; existing unmarked backups
+remain readable. See [settings backup compatibility](docs/settings-backups.md).
+
 `/data/SetupHelper/settingsList` is a complete list of settings saved to
 settingsBackup. Categories are:
 

@@ -49,7 +49,7 @@ class SettingsBackupFormatTests(unittest.TestCase):
                                  os=SimpleNamespace(path=path_api), open=mapped_open, dbus=dbus)
             backup(None, directory, True)
             saved = (root / "settingsBackup").read_text()
-            restore = load_method("MediaScanClass", "settingsRestore", ReadSettingsBackup=load_method(None, "ReadSettingsBackup", logging=log), logging=log,
+            restore = load_method("MediaScanClass", "settingsRestore", _read_settings_backup=load_method(None, "_read_settings_backup", logging=log), logging=log,
                                   os=os, dbus=dbus)
             restore(None, directory, True)
             return item, bus, log, saved
@@ -82,7 +82,7 @@ class SettingsBackupFormatTests(unittest.TestCase):
 
     def records(self, text):
         log = Mock()
-        read = load_method(None, "ReadSettingsBackup", logging=log)
+        read = load_method(None, "_read_settings_backup", logging=log)
         return list(read(io.StringIO(text))), log
 
     def test_legacy_records_keep_their_original_field_semantics(self):

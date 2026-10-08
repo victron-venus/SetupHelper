@@ -3061,7 +3061,7 @@ class InstallPackagesClass (threading.Thread):
 #	these are described in detail at the beginning of this file
 #	scans for flag files is done in run ()
 
-def ReadSettingsBackup (source):
+def _read_settings_backup (source):
 	"""Read escaped records, retaining the exact legacy two/seven-field format."""
 	import json
 
@@ -3334,7 +3334,7 @@ class MediaScanClass (threading.Thread):
 
 
 		with open (backupFile, 'r') as fd:
-			for parts in ReadSettingsBackup (fd):
+			for parts in _read_settings_backup (fd):
 				parameterExists = False
 				# ( setting path, value, attributes)
 				numberOfParts = len (parts)
