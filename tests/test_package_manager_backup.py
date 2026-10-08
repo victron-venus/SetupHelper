@@ -46,8 +46,9 @@ class BackupProcessTests(unittest.TestCase):
         log.error.assert_called_once_with("settings backup - log write failure")
 
     def test_backup_does_not_swallow_process_interrupts(self):
+        interrupted = Mock(side_effect=KeyboardInterrupt)
         with self.assertRaises(KeyboardInterrupt):
-            self.backup(Mock(side_effect=KeyboardInterrupt))
+            self.backup(interrupted)
 
     def restore(self, text, run, *, exists=True):
         with tempfile.TemporaryDirectory() as directory:
