@@ -60,7 +60,7 @@ class BackupProcessTests(unittest.TestCase):
             dbus = SimpleNamespace(SystemBus=Mock(return_value=bus))
             log = Mock()
             restore = load_method(
-                "MediaScanClass", "settingsRestore", logging=log, os=os,
+                "MediaScanClass", "settingsRestore", ReadSettingsBackup=load_method(None, "ReadSettingsBackup", logging=log), logging=log, os=os,
                 dbus=dbus, subprocess=process_api(run),
             )
             restore(None, directory, True)

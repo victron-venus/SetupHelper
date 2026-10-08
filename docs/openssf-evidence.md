@@ -51,3 +51,5 @@ The isolated PackageManager regression suite also covers nested archive discover
 rejection of directory symlink traversal, missing package removal without losing
 the list lock, and invalid removal indices. These tests execute the original
 function bodies with device dependencies replaced; they do not install packages.
+
+Settings backup regression tests preserve delimiter-containing values and prevent embedded newlines from becoming additional D-Bus writes. See [format compatibility](settings-backups.md); legacy unmarked backups remain readable.

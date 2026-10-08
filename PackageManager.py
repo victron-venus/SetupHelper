@@ -3061,6 +3061,29 @@ class InstallPackagesClass (threading.Thread):
 #	these are described in detail at the beginning of this file
 #	scans for flag files is done in run ()
 
+def ReadSettingsBackup (source):
+	"""Read escaped records, retaining the exact legacy two/seven-field format."""
+	import json
+
+	header = source.readline()
+	structured = header.rstrip ("\r\n") == "# SetupHelper settingsBackup JSONL v1"
+	if header.startswith ("# SetupHelper settingsBackup ") and not structured:
+		logging.error ("settingsRestore: unsupported settings backup format")
+		return
+	if not structured:
+		source.seek (0)
+	for number, line in enumerate (source, 2 if structured else 1):
+		try:
+			parts = json.loads (line) if structured else line.strip().split (',')
+		except ValueError:
+			parts = None
+		if not isinstance (parts, list) or len (parts) not in (2, 7) or not all (isinstance (field, str) for field in parts):
+			# A value may contain credentials. Report location, never record contents.
+			logging.error ("settingsRestore: invalid settings backup record at line " + str (number))
+			continue
+		yield parts
+
+
 class MediaScanClass (threading.Thread):
 
 
@@ -3186,6 +3209,7 @@ class MediaScanClass (threading.Thread):
 	#
 
 	def settingsBackup (self, backupPath, settingsOnly = False):
+		import json
 		settingsCount = 0
 		overlayCount = 0
 		logsWritten = "no logs"
@@ -3199,6 +3223,7 @@ class MediaScanClass (threading.Thread):
 
 			# backup settings
 			backupSettings = open (backupFile, 'w')
+			backupSettings.write ("# SetupHelper settingsBackup JSONL v1\n")
 			bus = dbus.SystemBus()
 			with open (settingsListFile, 'r') as listFile:
 				for line in listFile:
@@ -3227,9 +3252,9 @@ class MediaScanClass (threading.Thread):
 					
 					# create entry with just settng path and value without a valid data type
 					if typeId == '':
-						line = ','.join ( [ setting, value ]) + '\n'
+						line = json.dumps ( [ setting, value ]) + '\n'
 					else:
-						line = ','.join ( [ setting, value, typeId, default, min, max, silent ]) + '\n'
+						line = json.dumps ( [ setting, value, typeId, default, min, max, silent ]) + '\n'
 
 					backupSettings.write (line)
 					settingsCount += 1
@@ -3309,10 +3334,9 @@ class MediaScanClass (threading.Thread):
 
 
 		with open (backupFile, 'r') as fd:
-			for line in fd:
+			for parts in ReadSettingsBackup (fd):
 				parameterExists = False
 				# ( setting path, value, attributes)
-				parts = line.strip().split (',')
 				numberOfParts = len (parts)
 				# full entry with attributes
 				if numberOfParts == 7:
@@ -3328,9 +3352,6 @@ class MediaScanClass (threading.Thread):
 					min = ''
 					max = ''
 					silent = ''
-				else:
-					logging.error ("settingsRestore: invalid line in file " + line)
-					continue
 				
 				path = parts[0]
 				value = parts[1]
