@@ -24,7 +24,7 @@ Interface documentation must explain accepted configuration and inputs, outputs,
 
 ## Build, test and analysis evidence
 
-No automated application test suite is documented in this checkout; this is an unresolved Passing prerequisite.
+The focused [package state regressions](../tests/test_package_manager_state.py) run in [CI](../.github/workflows/test-package-state.yml) using Python unittest. They test real method bodies with hardware/process dependencies replaced; full installation, recovery and broader application coverage remain unverified.
 
 [GitHub Actions](https://github.com/victron-venus/SetupHelper/actions) provides run logs and results. The checked-in workflow definitions are:
 

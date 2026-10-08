@@ -19,7 +19,7 @@ Changes retain the licensing terms of the files they modify. This fork lacks a c
 
 ## Local validation
 
-Review [PackageDevelopmentGuidelines.md](PackageDevelopmentGuidelines.md) before changing package installation behavior. This checkout has no documented automated application test suite. Do not treat a passing repository metadata workflow as an installation or recovery test; record isolated-device validation explicitly.
+Review [PackageDevelopmentGuidelines.md](PackageDevelopmentGuidelines.md) before changing package installation behavior. Run `python3 -m unittest discover -s tests -p 'test_*.py'` for the isolated backup/dependency state regressions. This focused suite does not validate full installation or recovery; record isolated-device validation explicitly.
 
 Automated tests use mocks or controlled fixtures where available. A passing unit test does not establish hardware safety. Describe any physical-device test separately, including firmware, configuration and expected rollback. Never run installation, deployment, Terraform apply or actuator commands merely to validate a documentation change.
 

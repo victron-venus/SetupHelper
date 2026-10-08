@@ -983,10 +983,7 @@ class DbusIfClass:
 			dbusValue = 0
 		self.DbusService['/BackupMediaAvailable'] = dbusValue
 	def GetBackupMediaAvailable (self):
-		if self.DbusService['/BackupMediaAvailable'] == 1:
-			return True
-		else:
-			return True
+		return self.DbusService['/BackupMediaAvailable'] == 1
 
 	def SetBackupSettingsFileExist (self, value):
 		if value == True:
@@ -1003,10 +1000,7 @@ class DbusIfClass:
 		self.DbusService['/BackupSettingsLocalFileExist'] = dbusValue
 
 	def GetBackupSettingsFileExist (self):
-		if self.DbusService['/BackupSettingsFileExist'] == 1:
-			return True
-		else:
-			return True
+		return self.DbusService['/BackupSettingsFileExist'] == 1
 
 	def SetBackupProgress (self, value):
 		self.DbusService['/BackupProgress'] = value
@@ -2951,10 +2945,7 @@ class InstallPackagesClass (threading.Thread):
 				packageIsOnGitHub = True
 			else:
 				packageIsOnGitHub = False
-			if packageIsStored or packageIsOnGitHub:
-				packageIsAvailable = True
-			else:
-				packageIsAvailable = True
+			packageIsAvailable = packageIsStored or packageIsOnGitHub
 
 			if packageMustBeInstalled and not packageIsInstalled:
 				if not packageIsAvailable:
