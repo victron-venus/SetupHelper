@@ -1283,6 +1283,100 @@ class DbusIfClass:
 #
 # the dbus settings and service parameters managed here are on a per-package basis
 
+def _package_dependency_errors (package_name):
+	"""Collect missing or forbidden packages while retaining partial read results."""
+	dependency_file = "/data/" + package_name + "/packageDependencies"
+	errors = []
+	if not os.path.exists (dependency_file):
+		return errors
+	try:
+		with open (dependency_file, 'r') as source:
+			for item in source:
+				parts = item.split ()
+				if len (parts) < 2:
+					logging.error ("package dependency " + item + " incomplete")
+					continue
+				package, requirement = parts[:2]
+				installed_file = "/etc/venus/installedVersion-" + package
+				is_installed = os.path.exists (installed_file)
+				must_be_installed = requirement == "installed"
+				if is_installed != must_be_installed:
+					errors.append ((package, requirement))
+		errors.sort ()
+	except Exception:
+		pass
+	return errors
+
+
+def _package_path_conflicts (replacement_file, package_name):
+	"""Read the owners of one replacement file, keeping readable partial data."""
+	conflicts = []
+	try:
+		with open (replacement_file + ".package", 'r') as source:
+			for entry in source:
+				owner = entry.strip ()
+				if owner != package_name:
+					conflicts.append ((owner, "uninstalled", os.path.basename (replacement_file)))
+	except Exception:
+		pass
+	return conflicts
+
+
+def _package_file_list_conflicts (path, package_name, last_precheck, check_scripts):
+	"""Inspect one declared file list and preserve its script-check trigger."""
+	conflicts = []
+	try:
+		with open (path, 'r') as source:
+			for entry in source:
+				entry = entry.strip ()
+				if not entry.startswith ("/"):
+					continue
+				replacement_file = entry.split ()[0].strip ()
+				owners_file = replacement_file + ".package"
+				if not os.path.exists (owners_file):
+					continue
+				if os.path.getmtime (owners_file) > last_precheck:
+					check_scripts = True
+				conflicts.extend (_package_path_conflicts (replacement_file, package_name))
+	except Exception:
+		logging.critical ("error while reading file lists for " + package_name)
+	return conflicts, check_scripts
+
+
+def _package_file_conflicts (package_name, last_precheck, check_scripts):
+	"""Inspect the versioned and version-independent lists in their original order."""
+	conflicts = []
+	for filename in ("fileList", "fileListVersionIndependent"):
+		path = "/data/" + package_name + "/FileSets/" + filename
+		if not os.path.exists (path):
+			continue
+		found, check_scripts = _package_file_list_conflicts (
+			path, package_name, last_precheck, check_scripts)
+		conflicts.extend (found)
+	return conflicts, check_scripts
+
+
+def _package_conflict_details (conflicts):
+	"""Describe each distinct conflict and whether available packages can resolve it."""
+	details = ""
+	resolvable = True
+	for package, requirement in list (set (conflicts)):
+		if requirement == "uninstalled":
+			details += package + " must not be installed\n"
+			continue
+		conflict_package = PackageClass.LocatePackage (package)
+		if conflict_package is None:
+			details += package + " must be installed but not available\n"
+			resolvable = False
+		elif conflict_package.PackageVersion != "":
+			details += package + " must be installed\n"
+		elif conflict_package.GitHubVersion != "":
+			details += package + " must be downloaded and installed\n"
+		else:
+			details += package + " unknown\n"
+	return details, resolvable
+
+
 class PackageClass:
 
 	# list of instantiated Packages
@@ -1992,28 +2086,7 @@ class PackageClass:
 
 		# check for package conflicts - but not if an operation is in progress
 		if doConflictChecks and not self.InstallPending and not self.DownloadPending:
-			# update dependencies
-			dependencyFile = "/data/" + packageName + "/packageDependencies"
-			dependencyErrors = []
-			if os.path.exists (dependencyFile):
-				try:
-					with open (dependencyFile, 'r') as file:
-						for item in file:
-							parts = item.split ()
-							if len (parts) < 2:
-								logging.error ("package dependency " + item + " incomplete")
-								continue
-							dependencyPackage = parts [0]
-							dependencyRequirement = parts [1]
-
-							installedFile = "/etc/venus/installedVersion-" + dependencyPackage
-							packageIsInstalled = os.path.exists (installedFile)
-							packageMustBeInstalled = dependencyRequirement == "installed"
-							if packageIsInstalled != packageMustBeInstalled:
-								dependencyErrors.append ( (dependencyPackage, dependencyRequirement) )
-					dependencyErrors.sort()
-				except Exception:
-					pass
+			dependencyErrors = _package_dependency_errors (packageName)
 			# log dependency changes if they have changed
 			if dependencyErrors != self.DependencyErrors:
 				self.DependencyErrors = dependencyErrors
@@ -2033,72 +2106,26 @@ class PackageClass:
 			# the setup script with the 'check' option will test the patch file
 			#	and report any patch failures
 
-			fileConflicts = []
-			fileLists =  [ "fileList", "fileListVersionIndependent" ]
-			for fileList in fileLists:
-				path = "/data/" + packageName + "/FileSets/" + fileList
-				if not os.path.exists (path):
-					continue
-				try:
-					with open (path, 'r') as file:
-						# valid entries begin with / and everything after white space is discarded
-						# the result should be a full path to one replacment file
-						for entry in file:
-							entry = entry.strip ()
-							if not entry.startswith ("/"):
-								continue
-							replacementFile = entry.split ()[0].strip ()
-							packagesList = replacementFile + ".package"
-							if not os.path.exists ( packagesList ) :
-								continue
-							# if a package list for an active file changes,
-							#	run script checks again to uncover new or resolved conflicts
-							if os.path.getmtime (packagesList) > self.lastScriptPrecheck:
-								doScriptPreChecks = True
-							try:
-								with open (packagesList, 'r') as plFile:
-									for entry2 in plFile:
-										packageFromList = entry2.strip()
-										# here if previously updated file was from a different package
-										if packageFromList != packageName:
-											file =  os.path.basename (replacementFile)
-											fileConflicts.append ( (packageFromList, "uninstalled", file) )
-							except Exception:
-								pass
-				except Exception:
-					logging.critical ("error while reading file lists for " + packageName)
-					continue
+			fileConflicts, doScriptPreChecks = _package_file_conflicts (
+				packageName, self.lastScriptPrecheck, doScriptPreChecks)
 
-			conflicts = self.DependencyErrors
+			conflicts = list (self.DependencyErrors)
 
 			if fileConflicts != self.FileConflicts:
 				self.FileConflicts = fileConflicts
 				if len (fileConflicts) > 0:
 					for (otherPackage, dependency, file) in fileConflicts:
 						logging.info ("to install " + packageName + ", " + otherPackage + " must not be installed (" + file + ")" )
-						conflicts.append ( ( otherPackage, dependency ) )
 				else:
 					logging.info ("file conflicts for " + packageName + " have been resolved")
 
+			# File conflicts remain active even when the previous scan found the same files.
+			# Keep the dependency cache independent so every refresh combines both sources.
+			conflicts.extend ((otherPackage, dependency) for otherPackage, dependency, _ in fileConflicts)
+
 			details = ""
 			if len (conflicts) > 0:
-				# eliminate duplicates
-				conflicts = list ( set ( conflicts ) )
-				resolveOk = True
-				for ( otherPackage, dependency ) in conflicts:
-					if dependency == "uninstalled":
-						details += otherPackage + " must not be installed\n"
-					else:
-						conflictPackage = PackageClass.LocatePackage (otherPackage)
-						if conflictPackage == None:
-							details += otherPackage + " must be installed but not available\n"
-							resolveOk = False
-						elif conflictPackage.PackageVersion != "":
-							details += otherPackage + " must be installed\n"
-						elif conflictPackage.GitHubVersion != "":
-							details += otherPackage + " must be downloaded and installed\n"
-						else:
-							details += otherPackage + " unknown\n"
+				details, resolveOk = _package_conflict_details (conflicts)
 				self.SetIncompatible ("package conflict", details, resolvable=resolveOk)
 				compatible = False
 
