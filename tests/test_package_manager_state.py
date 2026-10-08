@@ -14,9 +14,8 @@ def load_method(class_name, method_name, **environment):
     # Importing PackageManager starts device workers. Compile the original
     # method body alone and replace only its hardware/process dependencies.
     tree = ast.parse(SOURCE.read_text())
-    cls = next(
-        node
-        for node in tree.body
+    cls = tree if class_name is None else next(
+        node for node in tree.body
         if isinstance(node, ast.ClassDef) and node.name == class_name
     )
     method = next(

@@ -24,7 +24,7 @@ Interface documentation must explain accepted configuration and inputs, outputs,
 
 ## Build, test and analysis evidence
 
-The focused [package state regressions](../tests/test_package_manager_state.py) run in [CI](../.github/workflows/test-package-state.yml) using Python unittest. They test real method bodies with hardware/process dependencies replaced; full installation, recovery and broader application coverage remain unverified.
+The focused [package state regressions](../tests/test_package_manager_state.py) and [backup/process regressions](../tests/test_package_manager_backup.py) run in [CI](../.github/workflows/test-package-state.yml) using Python unittest. They test real method bodies with hardware/process dependencies replaced, including unsuccessful archive/settings commands, silent-setting restoration, missing backup files and RTC process completion. Full installation, recovery and broader application coverage remain unverified.
 
 [GitHub Actions](https://github.com/victron-venus/SetupHelper/actions) provides run logs and results. The checked-in workflow definitions are:
 
