@@ -46,3 +46,8 @@ Do not equate a green metadata or release job with successful application tests.
 - Link only this project's real awarded badge once the assessment is accepted.
 
 The live assessment, when created, is the source of truth for the badge level. Unverified criteria remain open.
+
+The isolated PackageManager regression suite also covers nested archive discovery,
+rejection of directory symlink traversal, missing package removal without losing
+the list lock, and invalid removal indices. These tests execute the original
+function bodies with device dependencies replaced; they do not install packages.

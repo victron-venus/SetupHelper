@@ -659,13 +659,13 @@ def LocatePackagePath (origPath):
 	paths = os.listdir (origPath)
 	for path in paths:
 		newPath = origPath +'/' + path
-		if os.path.isdir(newPath):
+		if os.path.isdir(newPath) and not os.path.islink(newPath):
 			# found version file, make sure it is "valid"
 			versionFile = newPath + "/version"
 			if os.path.isfile( versionFile ):
 				return newPath
 			else:
-				packageDir = locatePackagePath (newPath)
+				packageDir = LocatePackagePath (newPath)
 				# found a package directory
 				if packageDir != None:
 					return packageDir
@@ -1743,6 +1743,9 @@ class PackageClass:
 				DbusIf.UpdateStatus ( message="removing " + packageName, where='Editor', logLevel=INFO )
 		# no package name specified, so this is a call from system initialization - messages to log only
 		elif packageIndex != None:
+			if type(packageIndex) is not int or not 0 <= packageIndex < len(PackageClass.PackageList):
+				logging.error ("RemovePackage: invalid package index")
+				return False
 			guiRequestedRemove = False
 			name = PackageClass.PackageList [packageIndex].PackageName
 			if name == None or name == "":
@@ -1776,7 +1779,7 @@ class PackageClass:
 			toIndex = packageIndex
 			matchFound = True
 
-		packageIsInstalled = packages[toIndex].InstalledVersion != ""
+		packageIsInstalled = matchFound and packages[toIndex].InstalledVersion != ""
 		
 		# if package is installed, don't remove it
 		if matchFound and not packageIsInstalled:
