@@ -44,7 +44,15 @@ class PackageConflictRefreshTests(unittest.TestCase):
             open=self.read_file,
             os=filesystem,
             logging=logging,
-            VersionToNumber=load_method(None, "VersionToNumber", re=re),
+            VersionToNumber=load_method(
+                None,
+                "VersionToNumber",
+                re=re,
+                _version_release_kind=load_method(None, "_version_release_kind"),
+                _without_large_build_suffix=load_method(
+                    None, "_without_large_build_suffix"
+                ),
+            ),
             VenusVersion="v3.0",
             VenusVersionNumber=30000000090000,
             Platform="Raspberry Pi",
