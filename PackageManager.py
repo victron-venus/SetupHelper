@@ -416,52 +416,51 @@ global InitializePackageManager # initialized/used in main, set in PushAction, M
 #
 #	returns the version number or 0 if string does not parse into needed sections
 
+def _version_release_kind (other_parts, part_count):
+	"""Preserve the documented beta/alpha/development version priority."""
+	if part_count >= 2:
+		if 'b' in other_parts or '~' in other_parts:
+			return 'beta', 60000
+		if 'a' in other_parts:
+			return 'alpha', 30000
+		if 'd' in other_parts:
+			return 'develop', 0
+	return 'release', 90000
+
+
 def VersionToNumber (version):
 	version = version.replace ("large","L")
-	numberParts = re.split (r'\D+', version)
-	otherParts = re.split (r'\d+', version)
+	number_parts = re.split (r'\D+', version)
+	other_parts = re.split (r'\d+', version)
 	# discard blank elements
 	#	this can happen if the version string starts with alpha characters (like "v")
 	# 	of if there are no numeric digits in the version string
-	while numberParts and numberParts[0] == "":
-		numberParts.pop(0)
+	while number_parts and number_parts[0] == "":
+		number_parts.pop(0)
 
-	numberPartsLength = len (numberParts)
+	part_count = len (number_parts)
 
-	if numberPartsLength == 0:
+	if part_count == 0:
 		return 0
-	versionNumber = 0
-	releaseType='release'
-	if numberPartsLength >= 2:
-		if 'b' in otherParts or '~' in otherParts:
-			releaseType = 'beta'
-			versionNumber += 60000
-		elif 'a' in otherParts:
-			releaseType = 'alpha'
-			versionNumber += 30000
-		elif 'd' in otherParts:
-			releaseType = 'develop'
+	release_type, version_number = _version_release_kind (other_parts, part_count)
 
-	# if release all parts contribute to the main version number
-	#	and offset is greater than all prerelease versions
-	if releaseType == 'release':
-		versionNumber += 90000
-	# if pre-release, last part will be the pre release part
-	#	and others part will be part the main version number
-	else:
-		numberPartsLength -= 1
-		if numberParts [numberPartsLength] != "":
-			versionNumber += int (numberParts [numberPartsLength])
+	# Stable releases sort above prereleases. For prereleases, the last
+	# number is the prerelease sequence rather than a core version part.
+	if release_type != 'release':
+		part_count -= 1
+		if number_parts [part_count] != "":
+			version_number += int (number_parts [part_count])
 
 	# include core version number
-	if numberPartsLength >= 1 and numberParts [0] != "":
-		versionNumber += int (numberParts [0]) * 10000000000000
-	if numberPartsLength >= 2 and numberParts [1] != "":
-		versionNumber += int (numberParts [1]) * 1000000000
-	if numberPartsLength >= 3 and numberParts [2] != "":
-		versionNumber += int (numberParts [2]) * 100000
+	if part_count >= 1 and number_parts [0] != "":
+		version_number += int (number_parts [0]) * 10000000000000
+	if part_count >= 2 and number_parts [1] != "":
+		version_number += int (number_parts [1]) * 1000000000
+	if part_count >= 3 and number_parts [2] != "":
+		version_number += int (number_parts [2]) * 100000
 
-	return versionNumber
+	return version_number
+
 
 
 # get venus version
