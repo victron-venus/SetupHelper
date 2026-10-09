@@ -3069,6 +3069,46 @@ class InstallPackagesClass (threading.Thread):
 #	these are described in detail at the beginning of this file
 #	scans for flag files is done in run ()
 
+def _read_settings_backup (source):
+	"""Validate the format before exposing bounded, escaped or legacy records."""
+	import json
+
+	# Bound each physical record, including malformed input, before JSON decoding.
+	max_record_chars = 1024 * 1024
+	header = source.readline (max_record_chars + 1)
+	structured = header.rstrip ("\r\n") == "# SetupHelper settingsBackup JSONL v1"
+	if header.startswith ("# SetupHelper settingsBackup ") and not structured:
+		logging.error ("settingsRestore: unsupported settings backup format")
+		return None
+	if not structured:
+		source.seek (0)
+
+	def records ():
+		number = 2 if structured else 1
+		while True:
+			line = source.readline (max_record_chars + 1)
+			if not line:
+				return
+			parts = None
+			if len (line) > max_record_chars:
+				# Discard the rest of this one record without allocating its full value.
+				while line and not line.endswith ("\n"):
+					line = source.readline (max_record_chars + 1)
+			else:
+				try:
+					parts = json.loads (line) if structured else line.strip().split (',')
+				except (ValueError, RecursionError):
+					pass
+			if not isinstance (parts, list) or len (parts) not in (2, 7) or not all (isinstance (field, str) for field in parts):
+				# A value may contain credentials. Report location, never record contents.
+				logging.error ("settingsRestore: invalid settings backup record at line " + str (number))
+			else:
+				yield parts
+			number += 1
+
+	return records ()
+
+
 class MediaScanClass (threading.Thread):
 
 
@@ -3194,6 +3234,7 @@ class MediaScanClass (threading.Thread):
 	#
 
 	def settingsBackup (self, backupPath, settingsOnly = False):
+		import json
 		settingsCount = 0
 		overlayCount = 0
 		logsWritten = "no logs"
@@ -3207,6 +3248,7 @@ class MediaScanClass (threading.Thread):
 
 			# backup settings
 			backupSettings = open (backupFile, 'w')
+			backupSettings.write ("# SetupHelper settingsBackup JSONL v1\n")
 			bus = dbus.SystemBus()
 			with open (settingsListFile, 'r') as listFile:
 				for line in listFile:
@@ -3235,9 +3277,9 @@ class MediaScanClass (threading.Thread):
 					
 					# create entry with just settng path and value without a valid data type
 					if typeId == '':
-						line = ','.join ( [ setting, value ]) + '\n'
+						line = json.dumps ( [ setting, value ]) + '\n'
 					else:
-						line = ','.join ( [ setting, value, typeId, default, min, max, silent ]) + '\n'
+						line = json.dumps ( [ setting, value, typeId, default, min, max, silent ]) + '\n'
 
 					backupSettings.write (line)
 					settingsCount += 1
@@ -3311,16 +3353,18 @@ class MediaScanClass (threading.Thread):
 		if not os.path.exists (backupFile):
 			logging.error (backupFile + " does not exist - can't restore settings")
 			return
-		bus = dbus.SystemBus()
 		settingsCount = 0
 		overlayCount = 0
 
 
 		with open (backupFile, 'r') as fd:
-			for line in fd:
+			records = _read_settings_backup (fd)
+			if records is None:
+				return
+			bus = dbus.SystemBus()
+			for parts in records:
 				parameterExists = False
 				# ( setting path, value, attributes)
-				parts = line.strip().split (',')
 				numberOfParts = len (parts)
 				# full entry with attributes
 				if numberOfParts == 7:
@@ -3336,9 +3380,6 @@ class MediaScanClass (threading.Thread):
 					min = ''
 					max = ''
 					silent = ''
-				else:
-					logging.error ("settingsRestore: invalid line in file " + line)
-					continue
 				
 				path = parts[0]
 				value = parts[1]

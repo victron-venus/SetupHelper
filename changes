@@ -1,3 +1,8 @@
+Unreleased:
+	fixed: preserve commas, quotes and embedded newlines in settings backups
+	new versioned backup records require an updated SetupHelper for restoration
+	legacy unmarked settings backups remain readable
+
 v9.4:
 	added support for Raspberry PI 5 platform
 
