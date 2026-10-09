@@ -665,10 +665,10 @@ def LocatePackagePath (origPath):
 			if os.path.isfile( versionFile ):
 				return newPath
 			else:
-				packageDir = LocatePackagePath (newPath)
+				package_dir = LocatePackagePath (newPath)
 				# found a package directory
-				if packageDir != None:
-					return packageDir
+				if package_dir != None:
+					return package_dir
 				# nothing found - continue looking in this directory
 				else:
 					continue
@@ -1130,18 +1130,18 @@ class DbusIfClass:
 
 	def ReadDefaultPackagelist (self):
 
-		listFileName = "/data/SetupHelper/defaultPackageList"
+		list_filename = "/data/SetupHelper/defaultPackageList"
 		try:
-			listFile = open (listFileName, 'r')
+			list_file = open (list_filename, 'r')
 		except OSError:
-			logging.error ("no defaultPackageList " + listFileName)
+			logging.error ("no defaultPackageList " + list_filename)
 		else:
-			for line in listFile:
+			for line in list_file:
 				parts = line.split ()
 				if len(parts) < 3 or line[0] == "#":
 					continue
 				self.rawDefaultPackages.append ( ( parts[0], parts[1], parts[2] ) )
-			listFile.close ()
+			list_file.close ()
 
 
 	# LOCK and UNLOCK - capitals used to make it easier to identify in the code
@@ -1779,14 +1779,14 @@ class PackageClass:
 			toIndex = packageIndex
 			matchFound = True
 
-		packageIsInstalled = matchFound and packages[toIndex].InstalledVersion != ""
+		package_is_installed = matchFound and packages[toIndex].InstalledVersion != ""
 		
 		# if package is installed, don't remove it
-		if matchFound and not packageIsInstalled:
+		if matchFound and not package_is_installed:
 			# if not just removing a duplicate
 			# block future automatic adds since the package is being removed
 			if not isDuplicate:
-				PackageClass.SetAutoAddOk (packageName, False)
+				PackageClass.SetAutoAddOk (packages[toIndex].PackageName, False)
 
 			# move packages after the one to be remove down one slot (copy info)
 			# each copy overwrites the lower numbered package
@@ -2914,58 +2914,66 @@ class InstallPackagesClass (threading.Thread):
 
 		DbusIf.LOCK ("ResolveConflicts")
 	
-		package = PackageClass.LocatePackage (packageName)
-		if package == None:
-			logging.error ("ResolveConflicts: " + packageName + "not found")
+		try:
+			package = PackageClass.LocatePackage (packageName)
+			if package == None:
+				logging.error ("ResolveConflicts: " + packageName + "not found")
+				return
 
-		for conflict in (package.DependencyErrors + package.FileConflicts):
-			if len (conflict) < 2:
-				logging.error ("ResolveConflicts: " + packageName + " missing parameters: " + str (conflict) )
-				continue
-			dependencyPackage = conflict[0]
-			dependencyRequirement = conflict[1]
-			if dependencyRequirement == "installed":
-				packageMustBeInstalled = True
-			elif dependencyRequirement == "uninstalled":
-				packageMustBeInstalled = False
-			else:
-				logging.error ("ResolveConflicts: " + packageName + " unrecognized requirement: " + str (conflict) )
-				continue
-
-			requiredPackage = PackageClass.LocatePackage (dependencyPackage)
-
-			if requiredPackage.InstalledVersion != "":
-				packageIsInstalled = True
-			else:
-				packageIsInstalled = False
-			if requiredPackage.PackageVersion != "":
-				packageIsStored = True
-			else:
-				packageIsStored = False
-			if requiredPackage.GitHubVersion != "":
-				packageIsOnGitHub = True
-			else:
-				packageIsOnGitHub = False
-			packageIsAvailable = packageIsStored or packageIsOnGitHub
-
-			if packageMustBeInstalled and not packageIsInstalled:
-				if not packageIsAvailable:
-					DbusIf.UpdateStatus ( message=dependencyPackage + " not available - can't install",
-								where='Editor', logLevel=WARNING )
-				elif not packageIsStored and packageIsOnGitHub:
-					logging.info ("ResolveConflicts: downloading and installing" + dependencyPackage + " so that " + packageName + " can be installed" )
-					PushAction ( command='download' + ':' + dependencyPackage, source=source )
-					# download will trigger install when it finished
-					requiredPackage.InstallAfterDownload = True
+			for conflict in (package.DependencyErrors + package.FileConflicts):
+				if len (conflict) < 2:
+					logging.error ("ResolveConflicts: " + packageName + " missing parameters: " + str (conflict) )
+					continue
+				dependencyPackage = conflict[0]
+				dependencyRequirement = conflict[1]
+				if dependencyRequirement == "installed":
+					packageMustBeInstalled = True
+				elif dependencyRequirement == "uninstalled":
+					packageMustBeInstalled = False
 				else:
-					logging.info ("ResolveConflicts: installing " + dependencyPackage + " so that " + packageName + " can be installed" )
-					PushAction ( command='install' + ':' + dependencyPackage, source=source )
+					logging.error ("ResolveConflicts: " + packageName + " unrecognized requirement: " + str (conflict) )
+					continue
 
-			elif not packageMustBeInstalled and packageIsInstalled:
-				logging.info ("ResolveConflicts: uninstalling " + dependencyPackage + " so that " + packageName + " can be installed" )
-				PushAction ( command='uninstall' + ':' + dependencyPackage, source=source )
+				requiredPackage = PackageClass.LocatePackage (dependencyPackage)
+				if requiredPackage is None:
+					if packageMustBeInstalled:
+						DbusIf.UpdateStatus (message=dependencyPackage + " not available - can't install",
+							where='Editor', logLevel=WARNING)
+					continue
 
-		DbusIf.UNLOCK ("ResolveConflicts")
+				if requiredPackage.InstalledVersion != "":
+					packageIsInstalled = True
+				else:
+					packageIsInstalled = False
+				if requiredPackage.PackageVersion != "":
+					packageIsStored = True
+				else:
+					packageIsStored = False
+				if requiredPackage.GitHubVersion != "":
+					packageIsOnGitHub = True
+				else:
+					packageIsOnGitHub = False
+				package_is_available = packageIsStored or packageIsOnGitHub
+
+				if packageMustBeInstalled and not packageIsInstalled:
+					if not package_is_available:
+						DbusIf.UpdateStatus ( message=dependencyPackage + " not available - can't install",
+									where='Editor', logLevel=WARNING )
+					elif not packageIsStored and packageIsOnGitHub:
+						logging.info ("ResolveConflicts: downloading and installing" + dependencyPackage + " so that " + packageName + " can be installed" )
+						PushAction ( command='download' + ':' + dependencyPackage, source=source )
+						# download will trigger install when it finished
+						requiredPackage.InstallAfterDownload = True
+					else:
+						logging.info ("ResolveConflicts: installing " + dependencyPackage + " so that " + packageName + " can be installed" )
+						PushAction ( command='install' + ':' + dependencyPackage, source=source )
+
+				elif not packageMustBeInstalled and packageIsInstalled:
+					logging.info ("ResolveConflicts: uninstalling " + dependencyPackage + " so that " + packageName + " can be installed" )
+					PushAction ( command='uninstall' + ':' + dependencyPackage, source=source )
+
+		finally:
+			DbusIf.UNLOCK ("ResolveConflicts")
 
 
 	#	InstallPackage run (the thread)
