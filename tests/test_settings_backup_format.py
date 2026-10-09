@@ -112,6 +112,75 @@ class SettingsBackupFormatTests(unittest.TestCase):
         self.assertNotIn(secret, str(log.error.call_args_list))
 
     def test_unknown_version_is_not_interpreted_as_legacy_data(self):
-        records, log = self.records("# SetupHelper settingsBackup JSONL v2\n/Settings/Test,wrong\n")
-        self.assertEqual(records, [])
+        log = Mock()
+        read = load_method(None, "_read_settings_backup", logging=log)
+        self.assertIsNone(read(io.StringIO("# SetupHelper settingsBackup JSONL v2\n/Settings/Test,wrong\n")))
         log.error.assert_called_once_with("settingsRestore: unsupported settings backup format")
+
+    def test_unknown_version_aborts_full_restore_before_any_device_or_file_changes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "settingsBackup").write_text("# SetupHelper settingsBackup JSONL v2\n")
+            log, bus, files = Mock(), Mock(), Mock()
+            device = SimpleNamespace(SystemBus=Mock(return_value=bus))
+            filesystem = SimpleNamespace(path=SimpleNamespace(
+                exists=os.path.exists,
+                isdir=lambda path: path == "/data/setupOptions",
+            ))
+            restore = load_method(
+                "MediaScanClass", "settingsRestore", logging=log, os=filesystem,
+                dbus=device, shutil=files,
+                _read_settings_backup=load_method(None, "_read_settings_backup", logging=log),
+            )
+            restore(None, directory, False)
+            device.SystemBus.assert_not_called()
+            bus.assert_not_called()
+            self.assertEqual(bus.mock_calls, [])
+            self.assertEqual(files.mock_calls, [])
+            log.info.assert_not_called()
+
+    def test_deep_json_is_rejected_and_next_record_survives(self):
+        value = "[" * 32768 + '"private-payload"' + "]" * 32768
+        valid = ["/Settings/Good", "retained"]
+        records, log = self.records("# SetupHelper settingsBackup JSONL v1\n" + value + "\n" + json.dumps(valid) + "\n")
+        self.assertEqual(records, [valid])
+        self.assertEqual(log.error.call_count, 1)
+        self.assertNotIn("private-payload", str(log.error.call_args_list))
+
+    def test_oversized_record_uses_bounded_reads_and_preserves_next_line(self):
+        class BoundedSource(io.StringIO):
+            def readline(self, size=-1):
+                self.assert_bound(size)
+                return super().readline(size)
+
+            def __iter__(self):
+                raise AssertionError("unbounded line iteration")
+
+            @staticmethod
+            def assert_bound(size):
+                if not 0 < size <= 1024 * 1024 + 1:
+                    raise AssertionError("unbounded record read")
+
+        valid = ["/Settings/Good", "retained"]
+        for structured in (False, True):
+            with self.subTest(structured=structured):
+                log = Mock()
+                read = load_method(None, "_read_settings_backup", logging=log)
+                header = "# SetupHelper settingsBackup JSONL v1\n" if structured else ""
+                good = json.dumps(valid) if structured else ",".join(valid)
+                source = BoundedSource(header + "x" * (2 * 1024 * 1024 + 7) + "\n" + good + "\n")
+                self.assertEqual(list(read(source)), [valid])
+                log.error.assert_called_once_with(
+                    "settingsRestore: invalid settings backup record at line " + str(2 if structured else 1)
+                )
+
+    def test_record_size_boundary_accepts_limit_and_rejects_one_more_character(self):
+        prefix = '["/Settings/Good","'
+        suffix = '"]\n'
+        value = "a" * (1024 * 1024 - len(prefix) - len(suffix))
+        header = "# SetupHelper settingsBackup JSONL v1\n"
+        for extra in ("", "a"):
+            with self.subTest(extra=bool(extra)):
+                records, log = self.records(header + prefix + value + extra + suffix)
+                self.assertEqual(records, [] if extra else [["/Settings/Good", value]])
+                self.assertEqual(log.error.call_count, int(bool(extra)))

@@ -3062,26 +3062,43 @@ class InstallPackagesClass (threading.Thread):
 #	scans for flag files is done in run ()
 
 def _read_settings_backup (source):
-	"""Read escaped records, retaining the exact legacy two/seven-field format."""
+	"""Validate the format before exposing bounded, escaped or legacy records."""
 	import json
 
-	header = source.readline()
+	# Bound each physical record, including malformed input, before JSON decoding.
+	max_record_chars = 1024 * 1024
+	header = source.readline (max_record_chars + 1)
 	structured = header.rstrip ("\r\n") == "# SetupHelper settingsBackup JSONL v1"
 	if header.startswith ("# SetupHelper settingsBackup ") and not structured:
 		logging.error ("settingsRestore: unsupported settings backup format")
-		return
+		return None
 	if not structured:
 		source.seek (0)
-	for number, line in enumerate (source, 2 if structured else 1):
-		try:
-			parts = json.loads (line) if structured else line.strip().split (',')
-		except ValueError:
+
+	def records ():
+		number = 2 if structured else 1
+		while True:
+			line = source.readline (max_record_chars + 1)
+			if not line:
+				return
 			parts = None
-		if not isinstance (parts, list) or len (parts) not in (2, 7) or not all (isinstance (field, str) for field in parts):
-			# A value may contain credentials. Report location, never record contents.
-			logging.error ("settingsRestore: invalid settings backup record at line " + str (number))
-			continue
-		yield parts
+			if len (line) > max_record_chars:
+				# Discard the rest of this one record without allocating its full value.
+				while line and not line.endswith ("\n"):
+					line = source.readline (max_record_chars + 1)
+			else:
+				try:
+					parts = json.loads (line) if structured else line.strip().split (',')
+				except (ValueError, RecursionError):
+					pass
+			if not isinstance (parts, list) or len (parts) not in (2, 7) or not all (isinstance (field, str) for field in parts):
+				# A value may contain credentials. Report location, never record contents.
+				logging.error ("settingsRestore: invalid settings backup record at line " + str (number))
+			else:
+				yield parts
+			number += 1
+
+	return records ()
 
 
 class MediaScanClass (threading.Thread):
@@ -3328,13 +3345,16 @@ class MediaScanClass (threading.Thread):
 		if not os.path.exists (backupFile):
 			logging.error (backupFile + " does not exist - can't restore settings")
 			return
-		bus = dbus.SystemBus()
 		settingsCount = 0
 		overlayCount = 0
 
 
 		with open (backupFile, 'r') as fd:
-			for parts in _read_settings_backup (fd):
+			records = _read_settings_backup (fd)
+			if records is None:
+				return
+			bus = dbus.SystemBus()
+			for parts in records:
 				parameterExists = False
 				# ( setting path, value, attributes)
 				numberOfParts = len (parts)

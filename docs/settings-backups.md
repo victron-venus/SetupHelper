@@ -15,8 +15,12 @@ create a fresh backup from the source device when possible.
 Update SetupHelper on the restore destination before using a new-format backup.
 Older SetupHelper versions do not understand the version header or JSON records.
 Keep an existing backup until the replacement has been verified. Unknown future
-format versions are rejected, and malformed records are reported by line number
-without exposing setting values in logs.
+format versions stop the entire restore before any settings, overlays or options
+are changed. Malformed records, including excessive JSON nesting, are skipped and
+reported by line number without exposing setting values in logs. Each physical
+record is limited to 1,048,576 characters including its line ending; oversized
+records are discarded using bounded reads, and subsequent valid records remain
+readable. This limit applies to both JSON-lines and legacy records.
 
 This change affects only `settingsBackup` records. It does not change the layout
 of separately backed-up setup options, overlays or logs. Automated tests exercise
